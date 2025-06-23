@@ -1,0 +1,81 @@
+import wikipedia
+import spacy
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix
+
+# 1. Load SpaCy English model
+nlp = spacy.load("en_core_web_sm")
+
+# 2. Define page titles
+geographic_titles = [
+    "Iran", "Africa", "Amazon River", "Rome", "Iraq",
+    "Nile", "Paris", "Tokyo", "Milan", "Australia"
+]
+
+non_geographic_titles = [
+    "Artificial intelligence", "Philosophy", "Quantum mechanics",
+    "Basketball", "Education", "Deep learning",
+    "Python (programming language)", "Photosynthesis",
+    "Human rights", "Blockchain"
+]
+
+# 3. Preprocessing using SpaCy
+def preprocess_with_spacy(text):
+    doc = nlp(text)
+    tokens = [token.lemma_.lower() for token in doc if token.is_alpha and not token.is_stop]
+    return ' '.join(tokens)
+
+# 4. Fetch Wikipedia pages
+def fetch_wikipedia_text(titles):
+    documents = []
+    for title in titles:
+        try:
+            page = wikipedia.page(title)
+            documents.append(page.content)
+        except Exception as e:
+            print(f"Failed to fetch {title}: {e}")
+    return documents
+
+print("Fetching Wikipedia pages...")
+geo_docs = fetch_wikipedia_text(geographic_titles)
+non_geo_docs = fetch_wikipedia_text(non_geographic_titles)
+
+# 5. Prepare dataset
+X_raw = geo_docs + non_geo_docs
+y = ['geographic'] * len(geo_docs) + ['non-geographic'] * len(non_geo_docs)
+
+print("Preprocessing texts with SpaCy...")
+X_cleaned = [preprocess_with_spacy(doc) for doc in X_raw]
+
+# 6. Feature extraction (Bag of Words)
+vectorizer = CountVectorizer(max_features=5000)
+X_features = vectorizer.fit_transform(X_cleaned)
+
+# 7. Split data
+X_train, X_test, y_train, y_test = train_test_split(
+    X_features, y, test_size=0.3, random_state=42
+)
+
+# 8. Train Naive Bayes
+nb_model = MultinomialNB()
+nb_model.fit(X_train, y_train)
+nb_preds = nb_model.predict(X_test)
+
+# 9. Train Logistic Regression
+lr_model = LogisticRegression(max_iter=1000, class_weight="balanced")
+lr_model.fit(X_train, y_train)
+lr_preds = lr_model.predict(X_test)
+
+# 10. Evaluate results
+def evaluate_model(name, y_true, y_pred):
+    print(f"\n=== {name} ===")
+    print("Confusion Matrix:")
+    print(confusion_matrix(y_true, y_pred))
+    print("\nClassification Report:")
+    print(classification_report(y_true, y_pred))
+
+evaluate_model("Naive Bayes", y_test, nb_preds)
+evaluate_model("Logistic Regression", y_test, lr_preds)
